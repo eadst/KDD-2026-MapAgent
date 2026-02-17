@@ -1,0 +1,101 @@
+[SYSTEM]
+You are a vision-language model for lane marking prediction quality assessment.
+
+Your task is to analyze a predicted lane line shown in an image and decide whether the prediction contains an error.
+
+The image contains:
+1.  **Underlying Road Image**: The ground truth evidence (asphalt, painted markings, shadows, curbs).
+2.  **Predicted Mask**: A red semi-transparent overlay representing the algorithm's prediction.
+
+
+**Visual Decoding Strategy (Crucial):**
+* **Look Through the Mask**: You must focus on the texture *beneath* the semi-transparent mask.
+* **Distinguish Layers**: The **Mask** is the "Hypothesis"; the **Road Texture** is the "Fact".
+* **Verification**: Check if the "Hypothesis" (Mask shape/position) aligns perfectly with the "Fact" (White/Yellow paint or logical topology) visible through the transparency.
+
+You must output:
+1.  A clear, step-by-step thought process (reasoning) within <think> tags.
+2.  Exactly one final error type.
+3.  The Ground Truth Category ID.
+
+**Ground Truth Category Mapping:**
+Use these IDs to identify the actual marking visible in the image:
+1: "Long dashed line"
+2: "Double solid line"
+3: "Single solid line"
+4: "Dashed-solid line"
+5: "Solid-dashed line"
+6: "Short dashed line"
+7: "Double dashed line"
+9: "Virtual line"
+10: "Stop line"
+
+Definitions and Rules:
+1. **Priority and Short-Circuit Logic**
+   * Evaluate errors strictly in the fixed priority order:
+     `extra_lane_line → category_error → geometry_error → structure_error → no_error`.
+   * As soon as one error type is confirmed, stop further checks and report that error only.
+
+2. **Virtual Line**
+   * A *virtual line* is a lane boundary that does **not** correspond to a visible painted marking on the road surface.
+   * Its purpose is to complete lane topology so that lanes remain continuous and closed in BEV coordinates.
+   * *Virtual line* is a valid category. If a predicted virtual line is plausibly placed to complete lane topology, it must **not** be treated as an `extra_lane_line`.
+
+3. **extra_lane_line**
+   * Apply when the predicted line does **not** correspond to any real painted marking **and** is **not** a justified virtual line.
+   * Predictions on shadows, seams, pavement texture, or irrelevant regions that cannot be explained by lane topology fall into this category.
+   * If the prediction is labeled as `virtual_line` but its placement does not reasonably complete lane topology, it is still an `extra_lane_line`.
+
+4. **category_error**
+   * This check is allowed only if the prediction aligns with a visible painted marking, or is a virtual line whose placement can be evaluated.
+   * If the visible marking type (or the topological role for a virtual line) does not match the declared predicted category, report `category_error`.
+
+5. **geometry_error**
+   * Preconditions: the predicted line is on the correct marking (or a justified virtual line), the category is correct, and the overall direction is correct.
+   * Applies to **local, correctable** geometric defects, such as short spikes, small kinks, jagged edges, or local wobbling.
+   * The reasoning must explicitly state **where** the deviation occurs (within the bounding box) and **how** it deviates (shape or pattern).
+
+6. **structure_error**
+   * Applies to structural failures that cannot be fixed by simple smoothing, including large deviations from the true path, jumping to another marking, major discontinuities, excessive extension or premature termination, or wrong traveling direction relative to the road.
+
+7. **no_error**
+   * Can be selected only if none of the above apply.
+   * The prediction must align with a visible marking or a justified virtual line, have the correct category, and show smooth, continuous geometry.
+
+[USER]
+<image>
+
+The image shows a predicted lane line overlaid as a red semi-transparent mask.
+
+Prediction Metadata:
+* Predicted Category: double_solid_line
+* Predicted Bounding Box (x, y, w, h): [0.0, 1473.0, 1536.0, 11.0]
+
+Important notes:
+* Follow the priority order: extra_lane_line > category_error > geometry_error > structure_error > no_error
+* When you confirm a higher-priority error, do not evaluate lower priorities.
+* Base your judgment ONLY on what is visible inside the bounding box.
+
+Output format (strict, nothing else):
+
+<think> Describe the reason of the error here. </think>
+ERROR_TYPE
+gt_category_id: ID
+
+Rules:
+* The tags <think> and </think> must appear exactly once.
+* After </think>, output exactly one line with the error type.
+* The error type must be exactly one of:
+  extra_lane_line
+  category_error
+  geometry_error
+  structure_error
+  no_error
+* On the next line, output "gt_category_id: " followed by the integer ID from the mapping (1-10) corresponding to the real marking visible.
+
+[ASSISTANT]
+<think>
+The predicted lane line lies directly on top of a real painted road marking along the bottom edge of the roadway. Within the highlighted region, the underlying marking is a double solid line with two parallel continuous stripes, matching the assigned type. The predicted line is straight and continuous across the full width of the image without visible kinks, gaps, or lateral drift from the paint. Therefore this prediction is correct.
+</think>
+no_error
+gt_category_id: 2

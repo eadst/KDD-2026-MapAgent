@@ -1,0 +1,157 @@
+# =========================
+# Data
+# =========================
+data:
+  train_files: experiments/data@train
+  val_files: experiments/data@validation
+
+  prompt_key: problem
+  answer_key: solution
+  image_key: image
+  video_key: videos
+
+  image_dir: null
+  video_fps: 2.0
+
+  max_prompt_length: 4096
+  max_response_length: 512
+
+  rollout_batch_size: 64        # GRPO: prompts per rollout step
+  mini_rollout_batch_size: null
+  val_batch_size: 512
+
+  format_prompt: ./experiments/format_prompt/map.jinja
+  override_chat_template: null
+
+  shuffle: true
+  seed: 42
+
+  min_pixels: 2359296              
+  max_pixels: 2359296
+
+  filter_overlong_prompts: true
+
+
+# =========================
+# Algorithm (GRPO)
+# =========================
+algorithm:
+  adv_estimator: grpo
+
+  disable_kl: false
+  use_kl_loss: true
+  kl_penalty: low_var_kl
+  kl_coef: 1.0e-3
+
+  online_filtering: false         # 不启用 DAPO-style 过滤
+  filter_key: overall
+  filter_low: 0.01
+  filter_high: 0.99
+
+
+# =========================
+# Worker
+# =========================
+worker:
+
+  # -------- Actor (Policy) --------
+  actor:
+    global_batch_size: 64
+    micro_batch_size_per_device_for_update: 1
+    micro_batch_size_per_device_for_experience: 2
+
+    max_grad_norm: 1.0
+
+    padding_free: true
+    dynamic_batching: true
+    ulysses_size: 1
+
+    model:
+      model_path: /root/paddlejob/workspace/env_run/output/lzh/LLaMA-Factory/saves/qwen3-vl-8b/map_agent_0121_1515_merged
+      enable_gradient_checkpointing: true
+      trust_remote_code: true
+      freeze_vision_tower: false   
+
+    optim:
+      lr: 1.0e-6                   # GRPO 推荐低 LR
+      weight_decay: 1.0e-2
+      strategy: adamw
+      lr_warmup_ratio: 0.0
+
+    fsdp:
+      enable_full_shard: true
+      enable_cpu_offload: false
+      enable_rank0_init: true
+
+    offload:
+      offload_params: true
+      offload_optimizer: false
+
+
+  # -------- Rollout --------
+  rollout:
+    n: 4                           # GRPO group size（推荐 4–8）
+    temperature: 1.6
+    top_p: 1.0
+
+    limit_images: 0
+    gpu_memory_utilization: 0.6
+
+    enforce_eager: false
+    enable_chunked_prefill: false
+
+    tensor_parallel_size: 2
+    disable_tqdm: false
+
+    val_override_config:
+      temperature: 0.6
+      top_p: 0.95
+      n: 1
+
+
+  # -------- Reference Model --------
+  ref:
+    fsdp:
+      enable_full_shard: true
+      enable_cpu_offload: true
+      enable_rank0_init: true
+
+    offload:
+      offload_params: false
+
+
+  # -------- Reward --------
+  reward:
+    reward_function: experiments/reward/map_reward.py:compute_score
+
+
+# =========================
+# Trainer
+# =========================
+trainer:
+  total_epochs: 2                 # GRPO 不需要多 epoch
+  max_steps: null
+
+  project_name: easy_r1
+  experiment_name: lane_error_grpo_new
+
+  logger: ["file", "wandb"]
+
+  nnodes: 1
+  n_gpus_per_node: 4
+
+  max_try_make_batch: 20
+
+  val_freq: 1
+  val_before_train: true
+  val_only: false
+
+  val_generations_to_log: 3
+
+  save_freq: 1
+  save_limit: 2
+
+  save_model_only: false
+  save_checkpoint_path: null
+  load_checkpoint_path: null
+  find_last_checkpoint: false
