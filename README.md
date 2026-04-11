@@ -3,6 +3,8 @@
 [![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg)](https://arxiv.org/abs/XXXX.XXXXX)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
+### The paper figures and bad cases are put in the paper folder.
+
 This repository contains the official implementation of:
 
 **MapAgent: An Industrial-Grade Agentic Framework for City-scale Lane-level Map Generation**
